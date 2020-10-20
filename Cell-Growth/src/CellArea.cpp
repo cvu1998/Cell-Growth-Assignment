@@ -1,5 +1,9 @@
 #include "CellArea.h"
 
+#ifndef _WIN64
+#include <tbb/tbb.h>
+#endif
+
 CellArea::CellArea(Elysium::Vector2 offset)
 {
     float percentage = Random::Float();
@@ -7,13 +11,12 @@ CellArea::CellArea(Elysium::Vector2 offset)
     NumberOfCancerCells = (unsigned int)(percentage * MinimumNumberOfCancerCell) + MinimumNumberOfCancerCell;
     unsigned int counter = 0;
     std::unordered_set<size_t> indexes;
-    while (counter < NumberOfCancerCells)
+    while (counter++ < NumberOfCancerCells)
     {
-        size_t index = (size_t)Random::Integer(0, NumberOfCells);
+        size_t index = (size_t)Random::Integer(0, NumberOfCells - 1);
         while (indexes.find(index) != indexes.end())
-            index = (size_t)Random::Integer(0, NumberOfCells);
+            index = (size_t)Random::Integer(0, NumberOfCells - 1);
         indexes.insert(index);
-        counter++;
     }
 
     for (size_t i = 0; i < NumberOfCells; i++)
@@ -55,8 +58,13 @@ void CellArea::onUpdate(Elysium::Timestep ts)
 
         if (!m_InputBuffer.empty())
         {
+#ifndef _WIN64
+            std::mutex lock;
+            tbb::task_group taskGroup;
+#endif
             for (size_t i : m_InputBuffer)
             {
+#ifdef _WIN64
                 int counter = 0;
                 int numberOfCells = Random::Integer(1, 8);
                 for (int j : m_Neighbors[i % s_NumberOfCellsPerPartition])
@@ -72,7 +80,13 @@ void CellArea::onUpdate(Elysium::Timestep ts)
                         m_Types[index] = CellType::MEDECINE;
                     }
                 }
+#else
+                taskGroup.run(InjectMedecineTask(&m_MedecineCells, &m_Neighbors, &m_Types, &lock, i));
+#endif
             }
+#ifndef _WIN64
+            taskGroup.wait();
+#endif
             m_InputBuffer.clear();
         }
 

@@ -100,7 +100,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(SolutionDir)\Dependencies\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -109,7 +109,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;tbb_debug.lib;tbb.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -124,7 +124,7 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(SolutionDir)\Dependencies\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -133,7 +133,7 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;tbb_debug.lib;tbb.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -146,7 +146,7 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CONSOLE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(SolutionDir)\Dependencies\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -170,7 +170,7 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(SolutionDir)\Dependencies\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
