@@ -25,13 +25,18 @@
 #include "Elysium/Physics/PhysicalBody.h"
 
 #include "Elysium/Editor.h"
+#include "Elysium/ImGuiUtility.h"
+
+// ---Networking---
+#include "Elysium/Network/UDPClient.h"
+#include "Elysium/Network/UDPServer.h"
 
 // ---Log---
 #include "Elysium/Log.h"
 
 // ---Renderer---
 #include "Elysium/Renderer/Camera.h"
-
+#include "Elysium/Renderer/Framebuffer.h"
 #include "Elysium/Renderer/Renderer2D.h"
 #include "Elysium/Renderer/Texture.h"
 

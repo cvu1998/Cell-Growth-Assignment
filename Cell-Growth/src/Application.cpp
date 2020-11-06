@@ -6,7 +6,7 @@ private:
     bool m_VSync = false;
 
 public:
-    Application(bool imgui=false) : Elysium::Application(imgui)
+    Application(const std::string& title) : Elysium::Application(title)
     {
         m_Window->setVSync(m_VSync);
         m_SceneManager.loadScene(new CellGrowthScene(m_Window->getWidth(), m_Window->getHeight()));
@@ -34,7 +34,7 @@ public:
 
 int main(void)
 {
-    Application* application = new Application(true);
+    Application* application = new Application("Cell Growth");
     application->Run();
     delete application;
     return 0;

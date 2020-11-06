@@ -1,6 +1,9 @@
+*.cache
 *.db
 *.db-shm
 *.db-wal
+*.deps
+*.exp
 *.filters
 *FileListAbsolute.txt
 *.idb

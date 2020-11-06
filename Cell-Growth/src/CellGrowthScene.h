@@ -1,6 +1,8 @@
 #pragma once
 
-#include "CellArea.h"
+#include "CellArea.cuh"
+
+#include <Elysium.h>
 
 class CellGrowthScene : public Elysium::Scene
 {
