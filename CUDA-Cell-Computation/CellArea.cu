@@ -1,15 +1,4 @@
-#include "CellArea.cuh"
-
-#ifndef _WIN64
-#include <tbb/tbb.h>
-#include <Elysium/Log.h>
-#include <Elysium/Timer.h>
-
-#include <Elysium/Renderer/Renderer2D.h>
-#else
-#include "kernel.cu"
-#define USE_CUDA
-#endif
+#include "CellArea.h"
 
 CellArea::CellArea(Elysium::Vector2 offset)
 {
@@ -18,80 +7,38 @@ CellArea::CellArea(Elysium::Vector2 offset)
     NumberOfCancerCells = (unsigned int)(percentage * MinimumNumberOfCancerCell) + MinimumNumberOfCancerCell;
     unsigned int counter = 0;
     std::unordered_set<size_t> indexes;
-    while (counter++ < NumberOfCancerCells)
+    while (counter < NumberOfCancerCells)
     {
-        size_t index = (size_t)Random::Integer(0, NumberOfCells - 1);
+        size_t index = (size_t)Random::Integer(0, NumberOfCells);
         while (indexes.find(index) != indexes.end())
-            index = (size_t)Random::Integer(0, NumberOfCells - 1);
+            index = (size_t)Random::Integer(0, NumberOfCells);
         indexes.insert(index);
+        counter++;
     }
 
+    for (size_t i = 0; i < NumberOfCells; i++)
     {
-        Elysium::Timer timer("Time to initialize grid: ");
-#ifdef USE_CUDA
-        Elysium::Vector2* devicePositions = 0;
-        cudaError_t cudaStatus = cudaSetDevice(0);
-        if (cudaStatus != cudaSuccess) {
-            goto Error;
-        }
+        if (i < s_NumberOfCellsPerPartition)
+            setNeighbor((int)i);
 
-        cudaStatus = cudaMalloc((void**)&devicePositions, NumberOfCells * sizeof(Elysium::Vector2));
-        if (cudaStatus != cudaSuccess) {
-            goto Error;
-        }
-
-        int nblocks = (NumberOfCells + 255) / 256;
-        calculatePosition<<<nblocks, 256>>>(devicePositions, offset, m_CellSize, NumberOfCell_X, NumberOfCells);
-
-        cudaStatus = cudaGetLastError();
-        if (cudaStatus != cudaSuccess) {
-            goto Error;
-        }
-        ELY_INFO("Status of CUDA: {0}", (int)cudaStatus);
-#endif
-
-        for (size_t i = 0; i < NumberOfCells; i++)
+        Positions[i] = { ((float)(i % NumberOfCell_X) - offset.x) * m_CellSize, ((float)(i / NumberOfCell_X) - offset.y) * m_CellSize };
+        if (indexes.find(i) != indexes.end())
         {
-            if (i < s_NumberOfCellsPerPartition)
-                setNeighbor((int)i);
-#ifndef USE_CUDA
-            Positions[i] = { ((float)(i % NumberOfCell_X) - offset.x) * m_CellSize, ((float)(i / NumberOfCell_X) - offset.y) * m_CellSize };
-#endif
-            if (indexes.find(i) != indexes.end())
-            {
-                Colors[i] = { 0.75f, 0.0f, 0.0f, 1.0f };
-                m_Types[i] = CellType::CANCER;
-            }
-            else
-            {
-                Colors[i] = { 0.0f, 1.0f, 0.0f, 1.0f };
-                m_Types[i] = CellType::HEALTHY;
-                NumberOfHealthyCells++;
-            }
+            Colors[i] = s_ColorRed;
+            m_Types[i] = CellType::CANCER;
         }
-
-        Elysium::Renderer2D::setPointSize(m_CellSize);
-
-        ELY_INFO("Number of cell per partition: {0}", s_NumberOfCellsPerPartition);
-        ELY_INFO("Number of threads: {0}", std::thread::hardware_concurrency());
-
-#ifdef USE_CUDA
-        cudaStatus = cudaDeviceSynchronize();
-        if (cudaStatus != cudaSuccess) {
-            goto Error;
+        else
+        {
+            Colors[i] = s_ColorGreen;
+            m_Types[i] = CellType::HEALTHY;
+            NumberOfHealthyCells++;
         }
-
-        cudaStatus = cudaMemcpy(Positions.data(), devicePositions, NumberOfCells * sizeof(Elysium::Vector2), cudaMemcpyDeviceToHost);
-        if (cudaStatus != cudaSuccess) {
-            goto Error;
-        }
-
-        ELY_INFO("Status of CUDA: {0}", (int)cudaStatus);
-
-    Error:
-        cudaFree(devicePositions);
-#endif
     }
+
+    Elysium::Renderer2D::setPointSize(m_CellSize);
+
+    ELY_INFO("Number of cell per partition: {0}", s_NumberOfCellsPerPartition);
+    ELY_INFO("Number of threads: {0}", std::thread::hardware_concurrency());
 }
 
 void CellArea::onUpdate(Elysium::Timestep ts)
@@ -108,13 +55,8 @@ void CellArea::onUpdate(Elysium::Timestep ts)
 
         if (!m_InputBuffer.empty())
         {
-#ifndef _WIN64
-            std::mutex lock;
-            tbb::task_group taskGroup;
-#endif
             for (size_t i : m_InputBuffer)
             {
-#ifdef _WIN64
                 int counter = 0;
                 int numberOfCells = Random::Integer(1, 8);
                 for (int j : m_Neighbors[i % s_NumberOfCellsPerPartition])
@@ -130,13 +72,7 @@ void CellArea::onUpdate(Elysium::Timestep ts)
                         m_Types[index] = CellType::MEDECINE;
                     }
                 }
-#else
-                taskGroup.run(InjectMedecineTask(&m_MedecineCells, &m_Neighbors, &m_Types, &lock, i));
-#endif
             }
-#ifndef _WIN64
-            taskGroup.wait();
-#endif
             m_InputBuffer.clear();
         }
 
@@ -167,7 +103,7 @@ void CellArea::onUpdate(Elysium::Timestep ts)
     }
 }
 
-void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats,
+void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats, 
     std::unordered_map<size_t, MedecineCell>& medecineMap,
     size_t min)
 {
@@ -196,7 +132,7 @@ void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats
                 }
             }
         }
-        break;
+            break;
         case CellType::HEALTHY:
         {
             uint8_t cancerCount = 0;
@@ -206,7 +142,7 @@ void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats
             if (cancerCount >= 6)
                 m_Types[i + min] = CellType::CANCER;
         }
-        break;
+            break;
         }
     }
 
@@ -215,16 +151,16 @@ void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats
         switch (m_Types[i + min])
         {
         case CellType::CANCER:
-            Colors[i + min] = { 0.75f, 0.0f, 0.0f, 1.0f };
+            Colors[i + min] = s_ColorRed;
             stats.NumberOfCancerCells++;
             break;
         case CellType::HEALTHY:
-            Colors[i + min] = { 0.0f, 1.0f, 0.0f, 1.0f };
+            Colors[i + min] = s_ColorGreen;
             stats.NumberOfHealthyCells++;
             break;
         case CellType::MEDECINE:
             moveMedecineCells(i + min, medecineMap, updatedMedecine);
-            Colors[i + min] = { 1.0f, 1.0f, 0.0f, 1.0f };
+            Colors[i + min] = s_ColorYellow;
             stats.NumberOfMedecineCells++;
             break;
         }
