@@ -98,9 +98,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(ProjectDir)\src\;$(CUDA_PATH)\include\</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -108,8 +108,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;$(CUDA_PATH)\lib\$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -122,9 +122,9 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(ProjectDir)\src\;$(CUDA_PATH)\include\</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -132,8 +132,8 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;$(CUDA_PATH)\lib\$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -144,9 +144,9 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CONSOLE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CONSOLE;_DEBUG;%(PreprocessorDefinitions)_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(ProjectDir)\src\;$(CUDA_PATH)\include\</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -154,8 +154,8 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;$(CUDA_PATH)\lib\$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -168,9 +168,9 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(SolutionDir)\Dependencies\Elysium\include\vendor\spdlog\include\;$(ProjectDir)\src\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Dependencies\GLFW\include\;$(SolutionDir)\Dependencies\Elysium\include\Glad\;$(SolutionDir)\Dependencies\Elysium\include\;$(SolutionDir)\Dependencies\Elysium\include\vendor\;$(ProjectDir)\src\;$(CUDA_PATH)\include\</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -178,8 +178,8 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;Elysium.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Dependencies\lib\$(Platform)\;$(SolutionDir)\Dependencies\Elysium\lib\$(Configuration)-$(Platform)\;$(CUDA_PATH)\lib\$(Platform)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;Elysium.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)res"
@@ -194,6 +194,11 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
   <ItemGroup>
     <ClInclude Include="src\CellArea.h" />
     <ClInclude Include="src\CellGrowthScene.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\cl\cell_kernel.cl" />
+    <None Include="src\CellArea.cpp" />
+    <None Include="src\CellArea.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

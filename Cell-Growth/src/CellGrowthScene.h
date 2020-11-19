@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CellArea.cuh"
+#include "CellArea.h"
 
 #include <Elysium.h>
 

@@ -33,7 +33,7 @@ void CellGrowthScene::onUpdate(Elysium::Timestep ts)
 
     m_CameraController.onUpdate(ts);
     Elysium::Renderer2D::beginScene(m_CameraController.getCamera());
-    for (size_t i = 0; i < CellArea::NumberOfCells; i++)
+    for (size_t i = 0; i < CellArea::NumberOfCell; i++)
     {
         Elysium::Renderer2D::drawPoint(m_Cells.Positions[i], m_Cells.Colors[i]);
     }
@@ -41,7 +41,7 @@ void CellGrowthScene::onUpdate(Elysium::Timestep ts)
 
     ImGui::Begin("Cell Growth");
     ImGui::Checkbox("Pause Scene", &m_Pause);
-    ImGui::Text("Number of Cells: %d", CellArea::NumberOfCells);
+    ImGui::Text("Number of Cells: %d", CellArea::NumberOfCell);
     ImGui::Text("Number of Cells Accounted: %d", m_Cells.NumberOfCancerCells + m_Cells.NumberOfHealthyCells + m_Cells.NumberOfMedecineCells);
     ImGui::Text("Number of Cancer Cells: %d", m_Cells.NumberOfCancerCells);
     ImGui::Text("Number of Healthy Cells: %d", m_Cells.NumberOfHealthyCells);
