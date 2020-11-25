@@ -190,10 +190,12 @@ xcopy /E /Y "$(ProjectDir)res" "$(SolutionDir)bin\$(Configuration)-$(Platform)\C
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\CellArea.cpp" />
     <ClCompile Include="src\CellGrowthScene.cpp" />
+    <ClCompile Include="src\OpenCLWrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CellArea.h" />
     <ClInclude Include="src\CellGrowthScene.h" />
+    <ClInclude Include="src\OpenCLWrapper.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="res\cl\cell_kernel.cl" />

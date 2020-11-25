@@ -2,15 +2,7 @@
 
 #include <unordered_set>
 
-#include <CL/cl.h>
-
-#include <Elysium.h>
-
-struct clProgram
-{
-    char* sourceStr = nullptr;
-    size_t sourceSize = 0;
-};
+#include "OpenCLWrapper.h"
 
 class CellArea
 {
@@ -19,22 +11,14 @@ public:
     static constexpr size_t NumberOfCell_X = 200;
     static constexpr size_t NumberOfCell_Y = 200;
 #else
-    static constexpr size_t NumberOfCell_X = 1024;
-    static constexpr size_t NumberOfCell_Y = 768;
+    static constexpr size_t NumberOfCell_X = 400;
+    static constexpr size_t NumberOfCell_Y = 400;
 #endif
 
     static constexpr size_t NumberOfCell = NumberOfCell_X * NumberOfCell_Y;
 
 private:
-    cl_platform_id* m_Platforms = nullptr;
-    cl_device_id m_CPU;
-    cl_device_id m_GPU;
-    cl_context m_CPUContext;
-    cl_context m_GPUContext;
-    cl_command_queue m_CPUCommandQueue;
-    cl_command_queue m_GPUCommandQueue;
-    cl_program m_CPUProgram;
-    cl_program m_GPUProgram;
+    OpenCLWrapper m_CLWrapper;
 
     enum class CellType
     {
@@ -53,14 +37,9 @@ private:
 
     struct MedecineCell
     {
+        int Valid = 0;
         CellType PreviousType = CellType::NONE;
-        int offset = 0;
-    };
-    
-    struct MedecineIndex
-    {
-        size_t index = 0;
-        int offset = 0;
+        int Offset = 0;
     };
 
     static constexpr size_t s_NumberOfThreads = 4;
@@ -79,10 +58,13 @@ private:
     float m_CurrentTime = 0.0f;
 
     std::unordered_set<size_t>m_InputBuffer;
-    std::unordered_map<size_t, MedecineCell> m_MedecineCells;
 
+    std::array<MedecineCell, NumberOfCell> m_MedecineCells;
+    std::array<Elysium::Vector4, NumberOfCell> m_MedecineColors;
     std::array<CellType, NumberOfCell> m_Types = { CellType::HEALTHY };
-    std::array<std::vector<int>, s_NumberOfCellsPerPartition> m_Neighbors;
+
+    std::array<int, s_NumberOfCellsPerPartition> m_Indexes = { 0 };
+    std::vector<int> m_Neighbors;
 
 public:
     std::array<Elysium::Vector2, NumberOfCell> Positions;
@@ -95,15 +77,9 @@ public:
 private:
     void setNeighbor(int index);
 
-    void updateCellsInPartition(CellType* partition, PartitionStats& stats, 
-        std::unordered_map<size_t, MedecineCell>& medecineMap,
-        size_t min);
-
-    void moveMedecineCells(size_t cellIndex,
-        std::unordered_map<size_t, MedecineCell>& medecineMap,
-        std::unordered_set<size_t>& updatedMedecine);
-
-    clProgram getProgramSoure(const char* filepath);
+    void updateHealthyCells();
+    void updateCancerCells();
+    void updateMedecineCells();
 
 public:
     CellArea(Elysium::Vector2 offset);

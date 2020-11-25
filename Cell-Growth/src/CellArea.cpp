@@ -1,137 +1,89 @@
 #include "CellArea.h"
 
-#define MAX_SOURCE_SIZE (0x100000)
-
 CellArea::CellArea(Elysium::Vector2 offset)
 {
-    //-----------OpenCL----------//
-
-    cl_uint platformCount = 0;
-    cl_int ret = clGetPlatformIDs(0, NULL, &platformCount);
-    ELY_INFO("Number of platforms found: {0}", (unsigned int)platformCount);
-    m_Platforms = (cl_platform_id*)malloc(platformCount * sizeof(cl_platform_id));
-    ret = clGetPlatformIDs(platformCount, m_Platforms, NULL);
-
-    for (unsigned int i = 0; i < platformCount; i++)
-    {
-        cl_device_id device;
-        m_CPU = clGetDeviceIDs(m_Platforms[i], CL_DEVICE_TYPE_CPU, 1, &device, NULL) == CL_SUCCESS ? device : m_CPU;
-        m_GPU = clGetDeviceIDs(m_Platforms[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL) == CL_SUCCESS ? device : m_GPU;
-    }
-
-    char* value;
-    size_t valueSize;
-    clGetDeviceInfo(m_CPU, CL_DEVICE_NAME, 0, NULL, &valueSize);
-    value = (char*)malloc(valueSize);
-    clGetDeviceInfo(m_CPU, CL_DEVICE_NAME, valueSize, value, NULL);
-    ELY_INFO("CPU device: {0}", value);
-    free(value);
-
-    clGetDeviceInfo(m_GPU, CL_DEVICE_NAME, 0, NULL, &valueSize);
-    value = (char*)malloc(valueSize);
-    clGetDeviceInfo(m_GPU, CL_DEVICE_NAME, valueSize, value, NULL);
-    ELY_INFO("GPU device: {0}", value);
-    free(value);
-
-    clProgram programSource = getProgramSoure("res/cl/cell_kernel.cl");
-
-    // Create OpenCL contexts
-    m_CPUContext = clCreateContext(NULL, 1, &m_CPU, NULL, NULL, &ret);
-    m_GPUContext = clCreateContext(NULL, 1, &m_GPU, NULL, NULL, &ret);
-
-    // Create command queues
-    m_CPUCommandQueue = clCreateCommandQueue(m_CPUContext, m_CPU, 0, &ret);
-    m_GPUCommandQueue = clCreateCommandQueue(m_GPUContext, m_GPU, 0, &ret);
-
-    cl_mem positions_mem_obj = clCreateBuffer(m_GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector2), NULL, &ret);
-
-    // Create programs from the kernel source
-    m_CPUProgram = clCreateProgramWithSource(m_CPUContext, 1,
-        (const char**)&programSource.sourceStr, (const size_t*)&programSource.sourceSize, &ret);
-    m_GPUProgram = clCreateProgramWithSource(m_GPUContext, 1,
-        (const char**)&programSource.sourceStr, (const size_t*)&programSource.sourceSize, &ret);
-
-    // Build programs
-    ret = clBuildProgram(m_CPUProgram, 1, &m_CPU, NULL, NULL, NULL);
-    ret = clBuildProgram(m_GPUProgram, 1, &m_GPU, NULL, NULL, NULL);
-
-    // Create the OpenCL kernel
-    cl_kernel kernel = clCreateKernel(m_GPUProgram, "calculate_positions", &ret);
-
-    // Set the arguments of the kernel
-    int numberOfCell_X = (int)NumberOfCell_X;
-    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&positions_mem_obj);
-    ret = clSetKernelArg(kernel, 1, sizeof(Elysium::Vector2), (void*)&offset);
-    ret = clSetKernelArg(kernel, 2, sizeof(float), (void*)&m_CellSize);
-    ret = clSetKernelArg(kernel, 3, sizeof(int), (void*)&numberOfCell_X);
-
-    // Execute the OpenCL kernel on the list
-    size_t local_item_size = 64; // Divide work items into groups of 64
-    ret = clEnqueueNDRangeKernel(m_GPUCommandQueue, kernel, 1, NULL,
-        &NumberOfCell, &local_item_size, 0, NULL, NULL);
-
-    // Read the memory buffer
-    ret = clEnqueueReadBuffer(m_GPUCommandQueue, positions_mem_obj, CL_TRUE, 0,
-        NumberOfCell * sizeof(Elysium::Vector2), Positions.data(), 0, NULL, NULL);
-
-    ret = clReleaseKernel(kernel);
-    ret = clReleaseMemObject(positions_mem_obj);
-
-    //-----------OpenCL----------//
-
+    int ret = 0;
     float percentage = Random::Float();
     constexpr size_t MinimumNumberOfCancerCell = NumberOfCell / 4;
     NumberOfCancerCells = (unsigned int)(percentage * MinimumNumberOfCancerCell) + MinimumNumberOfCancerCell;
+    NumberOfHealthyCells = NumberOfCell - NumberOfCancerCells;
     unsigned int counter = 0;
     std::unordered_set<size_t> indexes;
+    int* cancerCells = new int[NumberOfCell];
+    memset(cancerCells, 0, NumberOfCell);
     while (counter < NumberOfCancerCells)
     {
-        size_t index = (size_t)Random::Integer(0, NumberOfCell);
+        size_t index = (size_t)Random::Integer(0, NumberOfCell - 1);
         while (indexes.find(index) != indexes.end())
-            index = (size_t)Random::Integer(0, NumberOfCell);
+            index = (size_t)Random::Integer(0, NumberOfCell - 1);
         indexes.insert(index);
+        cancerCells[index] = 1;
         counter++;
     }
 
-    for (size_t i = 0; i < NumberOfCell; i++)
-    {
-        if (i < s_NumberOfCellsPerPartition)
-            setNeighbor((int)i);
+    m_CLWrapper.Init("res/cl/cell_kernel.cl");
 
-        if (indexes.find(i) != indexes.end())
-        {
-            Colors[i] = s_ColorRed;
-            m_Types[i] = CellType::CANCER;
-        }
-        else
-        {
-            Colors[i] = s_ColorGreen;
-            m_Types[i] = CellType::HEALTHY;
-            NumberOfHealthyCells++;
-        }
-    }
+    // Create the OpenCL kernel
+    cl_kernel kernel_positions = clCreateKernel(m_CLWrapper.GPUProgram, "calculate_positions", NULL);
+    cl_kernel kernel_cells_info = clCreateKernel(m_CLWrapper.GPUProgram, "set_cells", NULL);
+
+    cl_mem positions_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector2), NULL, NULL);
+
+    cl_mem cancer_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, cancer_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), cancerCells, 0, NULL, NULL);
+
+    cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+    cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+
+    // Set the arguments of the kernel
+    int numberOfCell_X = (int)NumberOfCell_X;
+    CL_ASSERT(clSetKernelArg(kernel_positions, 0, sizeof(cl_mem), (void*)&positions_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_positions, 1, sizeof(Elysium::Vector2), (void*)&offset));
+    CL_ASSERT(clSetKernelArg(kernel_positions, 2, sizeof(float), (void*)&m_CellSize));
+    CL_ASSERT(clSetKernelArg(kernel_positions, 3, sizeof(int), (void*)&numberOfCell_X));
+
+    CL_ASSERT(clSetKernelArg(kernel_cells_info, 0, sizeof(cl_mem), (void*)&cancer_cells_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_info, 1, sizeof(cl_mem), (void*)&type_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_info, 2, sizeof(cl_mem), (void*)&color_mem_obj));
+
+    // Execute the OpenCL kernel on the list
+    CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_positions, 1, NULL,
+        &NumberOfCell, nullptr, 0, NULL, NULL));
+
+    CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_cells_info, 1, NULL,
+        &NumberOfCell, nullptr, 0, NULL, NULL));
+
+    for (int i = 0; i < (int)s_NumberOfCellsPerPartition; i++)
+        setNeighbor(i);
 
     Elysium::Renderer2D::setPointSize(m_CellSize);
 
     ELY_INFO("Number of cell per partition: {0}", s_NumberOfCellsPerPartition);
-    ELY_INFO("Number of threads: {0}", std::thread::hardware_concurrency());
+
+    // Read the memory buffer
+    CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, positions_mem_obj, CL_TRUE, 0,
+        NumberOfCell * sizeof(Elysium::Vector2), Positions.data(), 0, NULL, NULL));
+
+    CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+        NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+    CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+        NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+
+    CL_ASSERT(clReleaseKernel(kernel_positions));
+    CL_ASSERT(clReleaseMemObject(positions_mem_obj));
+
+    CL_ASSERT(clReleaseKernel(kernel_cells_info));
+    CL_ASSERT(clReleaseMemObject(cancer_cells_mem_obj));
+    CL_ASSERT(clReleaseMemObject(type_mem_obj));
+    CL_ASSERT(clReleaseMemObject(color_mem_obj));
+
+    delete[] cancerCells;
 }
 
 CellArea::~CellArea()
 {
-    clFlush(m_CPUCommandQueue);
-    clFinish(m_CPUCommandQueue);
-    clReleaseProgram(m_CPUProgram);
-    clReleaseCommandQueue(m_CPUCommandQueue);
-    clReleaseContext(m_CPUContext);
-
-    clFlush(m_GPUCommandQueue);
-    clFinish(m_GPUCommandQueue);
-    clReleaseProgram(m_GPUProgram);
-    clReleaseCommandQueue(m_GPUCommandQueue);
-    clReleaseContext(m_GPUContext);
-
-    free(m_Platforms);
+    m_CLWrapper.Shutdown();
 }
 
 void CellArea::onUpdate(Elysium::Timestep ts)
@@ -151,165 +103,37 @@ void CellArea::onUpdate(Elysium::Timestep ts)
             for (size_t i : m_InputBuffer)
             {
                 int counter = 0;
-                int numberOfCells = Random::Integer(1, 8);
-                for (int j : m_Neighbors[i % s_NumberOfCellsPerPartition])
+                int numberOfCells = Random::Integer(6, 8);
+                int j = m_Indexes[i % s_NumberOfCellsPerPartition];
+                while (m_Neighbors[j] != 0)
                 {
                     counter++;
                     if (counter >= numberOfCells)
                         break;
 
-                    size_t index = j + ((i + 1) / s_NumberOfCellsPerPartition) * s_NumberOfCellsPerPartition;
-                    if (m_MedecineCells.find(index) == m_MedecineCells.end())
+                    size_t index = i + m_Neighbors[j];
+                    if (m_Types[index] != CellType::MEDECINE)
                     {
-                        m_MedecineCells.insert({ index, { m_Types[index], (int)index - (int)i } });
+                        m_MedecineCells[index] = { 1, m_Types[index], m_Neighbors[j] };
+                        m_MedecineColors[index] = Colors[index];
                         m_Types[index] = CellType::MEDECINE;
+                        Colors[index] = s_ColorYellow;
                     }
+                    j++;
                 }
             }
             m_InputBuffer.clear();
         }
 
-        std::thread threads[s_NumberOfThreads];
-        CellType* partitions[s_NumberOfThreads];
-        PartitionStats stats[s_NumberOfThreads];
-        std::unordered_map<size_t, MedecineCell> medecineMap[s_NumberOfThreads];
-        for (size_t i = 0; i < s_NumberOfThreads; i++)
-        {
-            partitions[i] = new CellType[s_NumberOfCellsPerPartition];
-            std::copy_n(m_Types.begin() + s_NumberOfCellsPerPartition * i, s_NumberOfCellsPerPartition, partitions[i]);
-            threads[i] = std::thread(&CellArea::updateCellsInPartition, this, partitions[i], std::ref(stats[i]), std::ref(medecineMap[i]), s_NumberOfCellsPerPartition * i);
-        }
-        for (size_t i = 0; i < s_NumberOfThreads; i++)
-        {
-            threads[i].join();
-        }
-        m_MedecineCells.clear();
-
-        for (size_t i = 0; i < s_NumberOfThreads; i++)
-        {
-            m_MedecineCells.insert(medecineMap[i].begin(), medecineMap[i].end());
-            NumberOfCancerCells += stats[i].NumberOfCancerCells;
-            NumberOfHealthyCells += stats[i].NumberOfHealthyCells;
-            NumberOfMedecineCells += stats[i].NumberOfMedecineCells;
-            delete[] partitions[i];
-        }
+        updateHealthyCells();
+        updateCancerCells();
+        updateMedecineCells();
     }
-}
-
-void CellArea::updateCellsInPartition(CellType* partition, PartitionStats& stats, 
-    std::unordered_map<size_t, MedecineCell>& medecineMap,
-    size_t min)
-{
-    std::unordered_set<size_t> updatedMedecine;
-    for (size_t i = 0; i < s_NumberOfCellsPerPartition; i++)
-    {
-        switch (partition[i])
-        {
-        case CellType::CANCER:
-        {
-            size_t counter = 0;
-            size_t medecineCells[8];
-            for (int j : m_Neighbors[i])
-            {
-                if (partition[j] == CellType::MEDECINE)
-                    medecineCells[counter++] = (size_t)j + min;
-            }
-
-            if (counter >= 6)
-            {
-                m_Types[i + min] = CellType::HEALTHY;
-                for (size_t j = 0; j < counter; j++)
-                {
-                    m_Types[medecineCells[j]] = CellType::HEALTHY;
-                    updatedMedecine.insert(medecineCells[j]);
-                }
-            }
-        }
-            break;
-        case CellType::HEALTHY:
-        {
-            uint8_t cancerCount = 0;
-            for (int j : m_Neighbors[i])
-                cancerCount += partition[j] == CellType::CANCER ? 1 : 0;
-
-            if (cancerCount >= 6)
-                m_Types[i + min] = CellType::CANCER;
-        }
-            break;
-        }
-    }
-
-    for (size_t i = 0; i < s_NumberOfCellsPerPartition; i++)
-    {
-        switch (m_Types[i + min])
-        {
-        case CellType::CANCER:
-            Colors[i + min] = s_ColorRed;
-            stats.NumberOfCancerCells++;
-            break;
-        case CellType::HEALTHY:
-            Colors[i + min] = s_ColorGreen;
-            stats.NumberOfHealthyCells++;
-            break;
-        case CellType::MEDECINE:
-            moveMedecineCells(i + min, medecineMap, updatedMedecine);
-            Colors[i + min] = s_ColorYellow;
-            stats.NumberOfMedecineCells++;
-            break;
-        }
-    }
-}
-
-void CellArea::moveMedecineCells(size_t cellIndex,
-    std::unordered_map<size_t, MedecineCell>& medecineMap,
-    std::unordered_set<size_t>& updatedMedecine)
-{
-    if (updatedMedecine.find(cellIndex) == updatedMedecine.end())
-    {
-        auto iterators = m_MedecineCells.equal_range(cellIndex);
-        for (auto it = iterators.first; it != iterators.second; it++)
-        {
-            if (it->second.PreviousType != CellType::MEDECINE)
-                m_Types[cellIndex] = it->second.PreviousType;
-
-            int index = (int)cellIndex + it->second.offset;
-            int xOffset = (it->second.offset < 0) ? it->second.offset + (int)NumberOfCell_X : it->second.offset - (int)NumberOfCell_X;
-            xOffset = abs(it->second.offset) == 1 ? it->second.offset : xOffset;
-            int yOffset = (it->second.offset < 0) ? (it->second.offset - 1) / (int)NumberOfCell_Y : (it->second.offset + 1) / (int)NumberOfCell_Y;
-            int x = (int)cellIndex % NumberOfCell_X;
-            int y = (int)cellIndex / NumberOfCell_X;
-            if (x + xOffset >= 0 && (size_t)(x + xOffset) < NumberOfCell_X && y + yOffset >= 0 && (size_t)(y + yOffset) < NumberOfCell_Y &&
-                index >= 0 && index < NumberOfCell)
-            {
-                updatedMedecine.insert({ cellIndex });
-                medecineMap.insert({ (size_t)index, { m_Types[index], it->second.offset } });
-                m_Types[index] = CellType::MEDECINE;
-            }
-        }
-    }
-}
-
-clProgram CellArea::getProgramSoure(const char* filepath)
-{
-    FILE* fp;
-    clProgram kernel;
-
-    fp = fopen(filepath, "r");
-    if (!fp)
-    {
-        ELY_ERROR("Failed to load kernel from {0}!", filepath);
-        return kernel;
-    }
-
-    kernel.sourceStr = (char*)malloc(MAX_SOURCE_SIZE);
-    kernel.sourceSize = fread(kernel.sourceStr, 1, MAX_SOURCE_SIZE, fp);
-    fclose(fp);
-
-    return kernel;
 }
 
 void CellArea::setNeighbor(int index)
 {
+    m_Indexes[index] = (int)m_Neighbors.size();
     for (size_t i = 0; i < 8; i++)
     {
         int x1 = index % (int)NumberOfCell_X;
@@ -321,8 +145,267 @@ void CellArea::setNeighbor(int index)
         xOffset = abs(s_NeighborIndexes[i]) == 1 ? s_NeighborIndexes[i] : xOffset;
         int yOffset = (s_NeighborIndexes[i] < 0) ? (s_NeighborIndexes[i] - 1) / (int)NumberOfCell_Y : (s_NeighborIndexes[i] + 1) / (int)NumberOfCell_Y;
         if (x1 + xOffset == x2 && y1 + yOffset == y2 && partitionIndex >= 0 && partitionIndex < s_NumberOfCellsPerPartition)
-            m_Neighbors[index].push_back(partitionIndex);
+            m_Neighbors.push_back(s_NeighborIndexes[i]);
     }
+    m_Neighbors.push_back(0);
+}
+
+void CellArea::updateHealthyCells()
+{
+    cl_kernel kernel_cells_update = clCreateKernel(m_CLWrapper.GPUProgram, "update_healthy_cells", NULL);
+
+    cl_mem cell_per_partition_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, sizeof(int), NULL, NULL);
+    cl_mem past_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+    cl_mem past_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+    cl_mem indexes_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, m_Indexes.size() * sizeof(int), NULL, NULL);
+    cl_mem neighbors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, m_Neighbors.size() * sizeof(int), NULL, NULL);
+
+    int numberOfCellsPerPartition = (int)s_NumberOfCellsPerPartition;
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, cell_per_partition_obj, CL_TRUE, 0, sizeof(int), &numberOfCellsPerPartition, 0, NULL, NULL);
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), m_Types.data(), 0, NULL, NULL);
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL);
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, indexes_mem_obj, CL_TRUE, 0, m_Indexes.size() * sizeof(int), m_Indexes.data(), 0, NULL, NULL);
+    clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, neighbors_mem_obj, CL_TRUE, 0, m_Neighbors.size() * sizeof(int), m_Neighbors.data(), 0, NULL, NULL);
+
+    cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+    cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 0, sizeof(cl_mem), (void*)&cell_per_partition_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 1, sizeof(cl_mem), (void*)&past_cells_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 2, sizeof(cl_mem), (void*)&past_colors_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 3, sizeof(cl_mem), (void*)&indexes_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 4, sizeof(cl_mem), (void*)&neighbors_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 5, sizeof(cl_mem), (void*)&type_mem_obj));
+    CL_ASSERT(clSetKernelArg(kernel_cells_update, 6, sizeof(cl_mem), (void*)&color_mem_obj));
+
+    CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_cells_update, 1, NULL,
+        &NumberOfCell, nullptr, 0, NULL, NULL));
+
+    CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+        NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+    CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+        NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+
+    CL_ASSERT(clReleaseKernel(kernel_cells_update));
+    CL_ASSERT(clReleaseMemObject(cell_per_partition_obj));
+    CL_ASSERT(clReleaseMemObject(past_cells_mem_obj));
+    CL_ASSERT(clReleaseMemObject(past_colors_mem_obj));
+    CL_ASSERT(clReleaseMemObject(indexes_mem_obj));
+    CL_ASSERT(clReleaseMemObject(neighbors_mem_obj));
+    CL_ASSERT(clReleaseMemObject(type_mem_obj));
+    CL_ASSERT(clReleaseMemObject(color_mem_obj));
+}
+
+void CellArea::updateCancerCells()
+{
+    int* updatedCells = new int[NumberOfCell];
+    memset(updatedCells, 0, NumberOfCell);
+    {
+        cl_kernel kernel_cells_update = clCreateKernel(m_CLWrapper.GPUProgram, "update_cancer_cells", NULL);
+
+        cl_mem cell_per_partition_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, sizeof(int), NULL, NULL);
+        cl_mem past_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem past_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem indexes_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, m_Indexes.size() * sizeof(int), NULL, NULL);
+        cl_mem neighbors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, m_Neighbors.size() * sizeof(int), NULL, NULL);
+
+        int numberOfCellsPerPartition = (int)s_NumberOfCellsPerPartition;
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, cell_per_partition_obj, CL_TRUE, 0, sizeof(int), &numberOfCellsPerPartition, 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), m_Types.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, indexes_mem_obj, CL_TRUE, 0, m_Indexes.size() * sizeof(int), m_Indexes.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, neighbors_mem_obj, CL_TRUE, 0, m_Neighbors.size() * sizeof(int), m_Neighbors.data(), 0, NULL, NULL);
+
+        cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem updated_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 0, sizeof(cl_mem), (void*)&cell_per_partition_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 1, sizeof(cl_mem), (void*)&past_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 2, sizeof(cl_mem), (void*)&past_colors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 3, sizeof(cl_mem), (void*)&indexes_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 4, sizeof(cl_mem), (void*)&neighbors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 5, sizeof(cl_mem), (void*)&type_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 6, sizeof(cl_mem), (void*)&color_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_cells_update, 7, sizeof(cl_mem), (void*)&updated_cells_mem_obj));
+
+        CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_cells_update, 1, NULL,
+            &NumberOfCell, nullptr, 0, NULL, NULL));
+
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, updated_cells_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(int), updatedCells, 0, NULL, NULL));
+
+        CL_ASSERT(clReleaseKernel(kernel_cells_update));
+        CL_ASSERT(clReleaseMemObject(cell_per_partition_obj));
+        CL_ASSERT(clReleaseMemObject(past_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_colors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(indexes_mem_obj));
+        CL_ASSERT(clReleaseMemObject(neighbors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(type_mem_obj));
+        CL_ASSERT(clReleaseMemObject(color_mem_obj));
+        CL_ASSERT(clReleaseMemObject(updated_cells_mem_obj));
+    }
+
+    {
+        cl_kernel kernel_neighbors_update = clCreateKernel(m_CLWrapper.GPUProgram, "update_neighbor_cancer_cells", NULL);
+
+        cl_mem past_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem past_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem updated_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem past_medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), m_Types.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, updated_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), updatedCells, 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_medecine_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL);
+
+        cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 0, sizeof(cl_mem), (void*)&past_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 1, sizeof(cl_mem), (void*)&past_colors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 2, sizeof(cl_mem), (void*)&type_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 3, sizeof(cl_mem), (void*)&color_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 4, sizeof(cl_mem), (void*)&updated_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 5, sizeof(cl_mem), (void*)&past_medecine_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_neighbors_update, 6, sizeof(cl_mem), (void*)&medecine_cells_mem_obj));
+
+        CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_neighbors_update, 1, NULL,
+            &NumberOfCell, nullptr, 0, NULL, NULL));
+
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, medecine_cells_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL));
+
+        CL_ASSERT(clReleaseKernel(kernel_neighbors_update));
+        CL_ASSERT(clReleaseMemObject(past_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_colors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(type_mem_obj));
+        CL_ASSERT(clReleaseMemObject(color_mem_obj));
+        CL_ASSERT(clReleaseMemObject(updated_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_medecine_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(medecine_cells_mem_obj));
+    }
+    delete[] updatedCells;
+}
+
+void CellArea::updateMedecineCells()
+{
+    MedecineCell* updatedMap = new MedecineCell[NumberOfCell];
+    {
+        cl_kernel kernel_medecine_update = clCreateKernel(m_CLWrapper.GPUProgram, "update_medecine_cells", NULL);
+
+        cl_mem cell_in_x_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, sizeof(int), NULL, NULL);
+        cl_mem cell_in_y_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, sizeof(int), NULL, NULL);
+        cl_mem past_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem past_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem past_medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+        cl_mem past_medecine_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+
+        int numberOfCellInX = (int)NumberOfCell_X;
+        int numberOfCellInY = (int)NumberOfCell_Y;
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, cell_in_x_obj, CL_TRUE, 0, sizeof(int), &numberOfCellInX, 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, cell_in_y_obj, CL_TRUE, 0, sizeof(int), &numberOfCellInY, 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), m_Types.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_medecine_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_medecine_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), m_MedecineColors.data(), 0, NULL, NULL);
+
+        cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+        cl_mem medecine_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 0, sizeof(cl_mem), (void*)&cell_in_x_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 1, sizeof(cl_mem), (void*)&cell_in_y_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 2, sizeof(cl_mem), (void*)&past_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 3, sizeof(cl_mem), (void*)&past_colors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 4, sizeof(cl_mem), (void*)&type_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 5, sizeof(cl_mem), (void*)&color_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 6, sizeof(cl_mem), (void*)&past_medecine_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 7, sizeof(cl_mem), (void*)&past_medecine_colors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 8, sizeof(cl_mem), (void*)&medecine_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 9, sizeof(cl_mem), (void*)&medecine_colors_mem_obj));
+
+        CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_medecine_update, 1, NULL,
+            &NumberOfCell, nullptr, 0, NULL, NULL));
+
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, medecine_cells_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, medecine_colors_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), m_MedecineColors.data(), 0, NULL, NULL));
+
+        CL_ASSERT(clReleaseKernel(kernel_medecine_update));
+        CL_ASSERT(clReleaseMemObject(cell_in_x_obj));
+        CL_ASSERT(clReleaseMemObject(cell_in_y_obj));
+        CL_ASSERT(clReleaseMemObject(past_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_colors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_medecine_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_medecine_colors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(type_mem_obj));
+        CL_ASSERT(clReleaseMemObject(color_mem_obj));
+        CL_ASSERT(clReleaseMemObject(medecine_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(medecine_colors_mem_obj));
+    }
+
+    {
+        cl_kernel kernel_medecine_update = clCreateKernel(m_CLWrapper.GPUProgram, "move_medecine_cells", NULL);
+
+        cl_mem past_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem past_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem past_medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_READ_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(int), m_Types.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_colors_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL);
+        clEnqueueWriteBuffer(m_CLWrapper.GPUCommandQueue, past_medecine_cells_mem_obj, CL_TRUE, 0, NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL);
+
+        cl_mem type_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(int), NULL, NULL);
+        cl_mem color_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+        cl_mem medecine_cells_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(MedecineCell), NULL, NULL);
+        cl_mem medecine_colors_mem_obj = clCreateBuffer(m_CLWrapper.GPUContext, CL_MEM_WRITE_ONLY, NumberOfCell * sizeof(Elysium::Vector4), NULL, NULL);
+
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 0, sizeof(cl_mem), (void*)&past_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 1, sizeof(cl_mem), (void*)&past_colors_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 2, sizeof(cl_mem), (void*)&type_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 3, sizeof(cl_mem), (void*)&color_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 4, sizeof(cl_mem), (void*)&past_medecine_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 5, sizeof(cl_mem), (void*)&medecine_cells_mem_obj));
+        CL_ASSERT(clSetKernelArg(kernel_medecine_update, 6, sizeof(cl_mem), (void*)&medecine_colors_mem_obj));
+
+        CL_ASSERT(clEnqueueNDRangeKernel(m_CLWrapper.GPUCommandQueue, kernel_medecine_update, 1, NULL,
+            &NumberOfCell, nullptr, 0, NULL, NULL));
+
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, type_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(CellType), m_Types.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, color_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), Colors.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, medecine_cells_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(MedecineCell), m_MedecineCells.data(), 0, NULL, NULL));
+        CL_ASSERT(clEnqueueReadBuffer(m_CLWrapper.GPUCommandQueue, medecine_colors_mem_obj, CL_TRUE, 0,
+            NumberOfCell * sizeof(Elysium::Vector4), m_MedecineColors.data(), 0, NULL, NULL));
+
+        CL_ASSERT(clReleaseKernel(kernel_medecine_update));
+        CL_ASSERT(clReleaseMemObject(past_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_colors_mem_obj));
+        CL_ASSERT(clReleaseMemObject(type_mem_obj));
+        CL_ASSERT(clReleaseMemObject(color_mem_obj));
+        CL_ASSERT(clReleaseMemObject(past_medecine_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(medecine_cells_mem_obj));
+        CL_ASSERT(clReleaseMemObject(medecine_colors_mem_obj));
+    }
+    delete[] updatedMap;
 }
 
 size_t CellArea::getIndex(const Elysium::Vector2& position)
