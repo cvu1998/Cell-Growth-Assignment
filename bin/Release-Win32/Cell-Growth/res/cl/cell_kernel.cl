@@ -30,19 +30,21 @@ __kernel void set_cells(__global int* readCells, __global int* cellTypes, __glob
     }
 }
 
-__kernel void update_healthy_cells(__constant int* numberOfCellsPerPartition, __global int* readCells, __global float4* readColors,
+__kernel void update_healthy_cancer_cells(__constant int* numberOfCellsPerPartition, __global int* readCells, __global float4* readColors,
     __constant int* indexes, __constant int* neighbors,
-    __global int* cellTypes, __global float* cellColor)
+    __global int* cellTypes, __global float* cellColor,
+    __global int* updatedCells)
 {
     int i = get_global_id(0);
 
     cellTypes[i] = readCells[i];
     float4 color = readColors[i];
 
+    int index = indexes[i % *numberOfCellsPerPartition];
+    int neighbor = i + neighbors[index];
+
     if (readCells[i] == 1)
     {
-        int index = indexes[i % *numberOfCellsPerPartition];
-        int neighbor = i + neighbors[index];
         int count = 0;
         while (neighbors[index] != 0)
         {
@@ -57,23 +59,8 @@ __kernel void update_healthy_cells(__constant int* numberOfCellsPerPartition, __
             color = (float4)(0.75f, 0.0f, 0.0f, 1.0f);
         }
     }
-    vstore4(color, i, cellColor);
-}
-
-__kernel void update_cancer_cells(__constant int* numberOfCellsPerPartition, __global int* readCells, __global float4* readColors,
-    __constant int* indexes, __constant int* neighbors,
-    __global int* cellTypes, __global float* cellColor,
-    __global int* updatedCells)
-{
-    int i = get_global_id(0);
-
-    cellTypes[i] = readCells[i];
-    float4 color = readColors[i];
-
-    if (readCells[i] == 0)
+    else if (readCells[i] == 0)
     {
-        int index = indexes[i % *numberOfCellsPerPartition];
-        int neighbor = i + neighbors[index];
         int count = 0;
         int medecines[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
         while (neighbors[index] != 0)
@@ -118,7 +105,7 @@ __kernel void update_neighbor_cancer_cells(__global int* readCells, __global flo
     vstore4(color, i, cellColor);
 }
 
-__kernel void update_medecine_cells(__constant int* numberOfCellInX, __constant int* numberOfCellInY,
+__kernel void update_medecine_cells(int numberOfCellInX, int numberOfCellInY,
     __global int* readCells, __global float4* readColors,
     __global int* cellTypes, __global float* cellColor,
     __global MedecineCell* readMedecineCells, __global float4* readMedecineColors,
@@ -133,11 +120,11 @@ __kernel void update_medecine_cells(__constant int* numberOfCellInX, __constant 
     {
         cellTypes[i] = readMedecineCells[i].PreviousType;
         color = readMedecineColors[i];
-        int yOffset = readMedecineCells[i].Offset / (*numberOfCellInX - 1);
-        int xOffset = readMedecineCells[i].Offset - (yOffset * *numberOfCellInX);
-        int y = (i / *numberOfCellInX) + yOffset;
-        int x = (i % *numberOfCellInX) + xOffset;
-        if (x >= 0 && x < *numberOfCellInX && y >= 0 && y < *numberOfCellInY)
+        int yOffset = readMedecineCells[i].Offset / (numberOfCellInX - 1);
+        int xOffset = readMedecineCells[i].Offset - (yOffset * numberOfCellInX);
+        int y = (i / numberOfCellInX) + yOffset;
+        int x = (i % numberOfCellInX) + xOffset;
+        if (x >= 0 && x < numberOfCellInX && y >= 0 && y < numberOfCellInY)
         {
             if (readCells[i + readMedecineCells[i].Offset] != 2)
             {
@@ -170,4 +157,31 @@ __kernel void move_medecine_cells(__global int* readCells, __global float4* read
         color = (float4)(1.0f, 1.0f, 0.0f, 1.0f);
     }
     vstore4(color, i, cellColor);
+}
+
+__kernel void count_cells(__global int* readCells, __global int* result, int numberOfCell, int numberOfPartitions)
+{
+    int i = get_global_id(0);
+    int startIndex = (numberOfCell / numberOfPartitions) * i;
+    int endIndex = (numberOfCell / numberOfPartitions) * (i + 1);
+    int outputIndex = i * 3;
+
+    result[outputIndex] = 0;
+    result[outputIndex + 1] = 0;
+    result[outputIndex + 2] = 0;
+    for (int j = startIndex; j < endIndex; j++)
+    {
+        switch (readCells[j])
+        {
+        case 0:
+            ++result[outputIndex];
+            break;
+        case 1:
+            ++result[outputIndex + 1];
+            break;
+        case 2:
+            ++result[outputIndex + 2];
+            break;
+        }
+    }
 }

@@ -77,9 +77,10 @@ public:
 private:
     void setNeighbor(int index);
 
-    void updateHealthyCells();
-    void updateCancerCells();
+    void updateHealthyAndCancerCells();
     void updateMedecineCells();
+
+    void countCells();
 
 public:
     CellArea(Elysium::Vector2 offset);
